@@ -18,7 +18,7 @@ tables: dict[str, pa.Table] = pytpch.dbgen(sf=1, table=pytpch.Table.Nation)
 # Generate a single chunk out of n chunks of a single table
 # this is wildly helpful when generating larger scale factors as you can make
 # subsets of the data and store them or join them after some sort of parallelism.
-tables: dict[str, pa.Table] = pytpch.dbgen(sf=1, table=pytpch.Table.Nation)
+tables: dict[str, pa.Table] = pytpch.dbgen(sf=1, n_steps=10, step=1, table=pytpch.Table.Nation)
 
 
 # NOTE! As mentioned in the docs for this function, it is NOT thread-safe.
