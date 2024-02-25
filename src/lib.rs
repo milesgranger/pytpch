@@ -1,8 +1,11 @@
 use anyhow::Result;
+use arrow::datatypes::DataType;
+use arrow::datatypes::Field;
+use arrow::datatypes::SchemaBuilder;
 use arrow::pyarrow::PyArrowType;
 use arrow_array::RecordBatch;
 use arrow_csv::ReaderBuilder;
-use std::{collections::HashMap, io::Cursor, io::Read, sync::Arc};
+use std::{collections::HashMap, io::Cursor, io::Read, str::FromStr, sync::Arc};
 
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
@@ -166,6 +169,25 @@ pub enum Table {
     Region = 9,
 }
 
+impl std::str::FromStr for Table {
+    type Err = anyhow::Error;
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s {
+            "part" => Ok(Table::Part),
+            "partsupp" => Ok(Table::PartSupp),
+            "supplier" => Ok(Table::Supplier),
+            "customer" => Ok(Table::Customer),
+            "orders" => Ok(Table::Orders),
+            "lineitem" => Ok(Table::Lineitem),
+            "order-lineitem" => Ok(Table::OrderLineitem),
+            "part-partsupp" => Ok(Table::PartPartSupp),
+            "nation" => Ok(Table::Nation),
+            "region" => Ok(Table::Region),
+            _ => Err(anyhow::Error::msg(format!("No table matching {}", s))),
+        }
+    }
+}
+
 impl ToString for Table {
     fn to_string(&self) -> String {
         match self {
@@ -206,7 +228,7 @@ fn read_tables<P: AsRef<std::path::Path>>(dir: P) -> Result<HashMap<String, Vec<
 
     // for each table name, gather files to that table and add to output
     for (name, records) in tables.iter_mut() {
-        let mut schema = None;
+        let schema = get_schema(Table::from_str(&name)?)?;
         println!("Table name: {}", &name);
 
         // Read in files that match this table name
@@ -216,16 +238,15 @@ fn read_tables<P: AsRef<std::path::Path>>(dir: P) -> Result<HashMap<String, Vec<
             if filename.contains(&format!("{}.tbl", &name)) {
                 let mut data = {
                     let mut file = std::fs::File::open(entry.path())?;
-                    let mut data = vec![];
-                    file.read_to_end(&mut data)?;
+                    let mut data = "".to_string();
+                    file.read_to_string(&mut data)?;
+
+                    // TODO: output has termination of "|\n" but arrow terminator only accepts u8
+                    // otherwise will read column of nulls at the end of each table
+                    let data = data.replace("|\n", "\n");
                     Cursor::new(data)
                 };
-                // Set schema for this table name
-                if schema.is_none() {
-                    schema = Some(format.infer_schema(&mut data, Some(100))?.0);
-                    data.set_position(0);
-                }
-                let csv = ReaderBuilder::new(Arc::new(schema.clone().unwrap()))
+                let csv = ReaderBuilder::new(Arc::new(schema.clone()))
                     .with_format(format.clone())
                     .build(&mut data)?;
                 for batch in csv {
@@ -235,6 +256,27 @@ fn read_tables<P: AsRef<std::path::Path>>(dir: P) -> Result<HashMap<String, Vec<
         }
     }
     Ok(tables)
+}
+
+fn get_schema(table: Table) -> Result<arrow::datatypes::Schema> {
+    let f = |name, type_, nullable| Field::new(name, type_, nullable);
+    let schema = match table {
+        Table::Part => {
+            let mut b = SchemaBuilder::new();
+            b.push(f("p_partkey", DataType::Int32, false));
+            b.push(f("p_name", DataType::Utf8, false));
+            b.push(f("p_mfgr", DataType::Utf8, false));
+            b.push(f("p_brand", DataType::Utf8, false));
+            b.push(f("p_type", DataType::Utf8, false));
+            b.push(f("p_size", DataType::Int32, false));
+            b.push(f("p_container", DataType::Utf8, false));
+            b.push(f("p_retailprice", DataType::Float64, false));
+            b.push(f("p_comment", DataType::Utf8, false));
+            b.finish()
+        }
+        _ => unimplemented!(),
+    };
+    Ok(schema)
 }
 
 macro_rules! load_query {
