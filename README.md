@@ -1,5 +1,9 @@
 Ergonomically create [TPC-H](https://www.tpc.org/tpch/) data thru Python as Arrow tables.
 
+
+**NOTE**:
+    This was a weekend project, it is a WIP. For now only x86_64 linux wheels are available on PyPI
+
 ```python
 
 import pytpch
@@ -25,14 +29,14 @@ tables: dict[str, pa.Table] = pytpch.dbgen(sf=1, table=pytpch.Table.Nation)
 #       in milesgranger/libdbgen, these shared global states are not removed so thus not thread-safe.
 #
 # Example of generating data in parallel:
-from concurrent.futures import ProcessPoolExecutor, wait
+from concurrent.futures import ProcessPoolExecutor
 
 n_chunks = 10  # 10 total chunks
 
 def gen_step(step):
     return pytpch.dbgen(sf=10, n_chunks=n_chunks, nth_step=step)
 
-with ThreadPoolExecutor() as executor:
+with ProcessPoolExecutor() as executor:
     jobs: list[dict[str, pa.Table]] = list(executor.map(gen_step, range(n_chunks)))
   
 
@@ -53,6 +57,7 @@ Python API for use in other projects.
 
 TODOS (roughly in order of priority):
   - [ ] Support for more than Linux x86_64 (mostly just adapting C lib and updating CI)
+  - [ ] Remove verbose stdout
   - [ ] Write directly to Arrow, removing CSV writing (w/ nanoarrow probably)
   - [ ] Make thread safe (remove global and static function variables in C lib, and remove changing of CWD)
   - [ ] Separate out the Rust stuff into it's own crate.
