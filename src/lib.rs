@@ -1,8 +1,11 @@
 use anyhow::Result;
+use arrow::datatypes::DataType;
+use arrow::datatypes::Field;
+use arrow::datatypes::SchemaBuilder;
 use arrow::pyarrow::PyArrowType;
 use arrow_array::RecordBatch;
 use arrow_csv::ReaderBuilder;
-use std::{collections::HashMap, io::Cursor, io::Read, sync::Arc};
+use std::{collections::HashMap, io::Cursor, io::Read, str::FromStr, sync::Arc};
 
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
@@ -58,11 +61,11 @@ pub fn dbgen_py(
     py: Python,
     sf: Option<usize>,
     table: Option<Table>,
-    n_chunks: Option<usize>,
+    n_steps: Option<usize>,
     nth_step: Option<usize>,
 ) -> PyResult<PyObject> {
     let table_batches = py
-        .allow_threads(|| dbgen(sf.unwrap_or(1), nth_step, n_chunks, table))
+        .allow_threads(|| dbgen(sf.unwrap_or(1), nth_step, n_steps, table))
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
     let pyarrow = py.import("pyarrow")?;
@@ -87,16 +90,16 @@ macro_rules! as_ptr {
 pub fn dbgen(
     scale: usize,
     step: Option<usize>,
-    n_chunks: Option<usize>, // analogous to 'children' in libdbgen
+    n_steps: Option<usize>, // analogous to 'children' in libdbgen
     table: Option<Table>,
 ) -> Result<ArrowTables> {
     // Invariants
-    if let Some(n_chunks) = n_chunks {
+    if let Some(n_steps) = n_steps {
         if let Some(step) = step {
-            if n_chunks < n_chunks {
+            if step > n_steps {
                 return Err(anyhow::Error::msg(format!(
-                    "Trying to set nth_step={} and n_chunks={}; nth_step must be <= n_chunks",
-                    step, n_chunks
+                    "Trying to set nth_step={} and n_steps={}; nth_step must be <= n_steps",
+                    step, n_steps
                 )));
             }
         }
@@ -114,7 +117,7 @@ pub fn dbgen(
         ffi::dbgen(
             &(scale as _),
             as_ptr!(step),
-            as_ptr!(n_chunks),
+            as_ptr!(n_steps),
             as_ptr!(table),
         )
     };
@@ -166,6 +169,25 @@ pub enum Table {
     Region = 9,
 }
 
+impl std::str::FromStr for Table {
+    type Err = anyhow::Error;
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s {
+            "part" => Ok(Table::Part),
+            "partsupp" => Ok(Table::PartSupp),
+            "supplier" => Ok(Table::Supplier),
+            "customer" => Ok(Table::Customer),
+            "orders" => Ok(Table::Orders),
+            "lineitem" => Ok(Table::Lineitem),
+            "order-lineitem" => Ok(Table::OrderLineitem),
+            "part-partsupp" => Ok(Table::PartPartSupp),
+            "nation" => Ok(Table::Nation),
+            "region" => Ok(Table::Region),
+            _ => Err(anyhow::Error::msg(format!("No table matching {}", s))),
+        }
+    }
+}
+
 impl ToString for Table {
     fn to_string(&self) -> String {
         match self {
@@ -206,7 +228,7 @@ fn read_tables<P: AsRef<std::path::Path>>(dir: P) -> Result<HashMap<String, Vec<
 
     // for each table name, gather files to that table and add to output
     for (name, records) in tables.iter_mut() {
-        let mut schema = None;
+        let schema = get_schema(Table::from_str(&name)?)?;
         println!("Table name: {}", &name);
 
         // Read in files that match this table name
@@ -216,16 +238,15 @@ fn read_tables<P: AsRef<std::path::Path>>(dir: P) -> Result<HashMap<String, Vec<
             if filename.contains(&format!("{}.tbl", &name)) {
                 let mut data = {
                     let mut file = std::fs::File::open(entry.path())?;
-                    let mut data = vec![];
-                    file.read_to_end(&mut data)?;
+                    let mut data = "".to_string();
+                    file.read_to_string(&mut data)?;
+
+                    // TODO: output has termination of "|\n" but arrow terminator only accepts u8
+                    // otherwise will read column of nulls at the end of each table
+                    let data = data.replace("|\n", "\n");
                     Cursor::new(data)
                 };
-                // Set schema for this table name
-                if schema.is_none() {
-                    schema = Some(format.infer_schema(&mut data, Some(100))?.0);
-                    data.set_position(0);
-                }
-                let csv = ReaderBuilder::new(Arc::new(schema.clone().unwrap()))
+                let csv = ReaderBuilder::new(Arc::new(schema.clone()))
                     .with_format(format.clone())
                     .build(&mut data)?;
                 for batch in csv {
@@ -235,6 +256,109 @@ fn read_tables<P: AsRef<std::path::Path>>(dir: P) -> Result<HashMap<String, Vec<
         }
     }
     Ok(tables)
+}
+
+fn get_schema(table: Table) -> Result<arrow::datatypes::Schema> {
+    let f = |name, type_, nullable| Field::new(name, type_, nullable);
+    let mut b = SchemaBuilder::new();
+    let schema = match table {
+        Table::Part => {
+            b.push(f("p_partkey", DataType::Int32, false));
+            b.push(f("p_name", DataType::Utf8, false));
+            b.push(f("p_mfgr", DataType::Utf8, false));
+            b.push(f("p_brand", DataType::Utf8, false));
+            b.push(f("p_type", DataType::Utf8, false));
+            b.push(f("p_size", DataType::Int32, false));
+            b.push(f("p_container", DataType::Utf8, false));
+            b.push(f("p_retailprice", DataType::Float64, false));
+            b.push(f("p_comment", DataType::Utf8, false));
+            b.finish()
+        }
+        Table::PartSupp => {
+            b.push(f("ps_partkey", DataType::Int32, false));
+            b.push(f("ps_suppkey", DataType::Int32, false));
+            b.push(f("ps_availqty", DataType::Int32, false));
+            b.push(f("ps_supplycost", DataType::Float64, false));
+            b.push(f("ps_comment", DataType::Utf8, false));
+            b.finish()
+        }
+        Table::Supplier => {
+            b.push(f("s_suppkey", DataType::Int32, false));
+            b.push(f("s_name", DataType::Utf8, false));
+            b.push(f("s_address", DataType::Utf8, false));
+            b.push(f("s_nationkey", DataType::Int32, false));
+            b.push(f("s_phone", DataType::Utf8, false));
+            b.push(f("s_acctbal", DataType::Float64, false));
+            b.push(f("s_comment", DataType::Utf8, false));
+            b.finish()
+        }
+        Table::Customer => {
+            b.push(f("c_custkey", DataType::Int32, false));
+            b.push(f("c_name", DataType::Utf8, false));
+            b.push(f("c_address", DataType::Utf8, false));
+            b.push(f("c_nationkey", DataType::Int32, false));
+            b.push(f("c_phone", DataType::Utf8, false));
+            b.push(f("c_acctbal", DataType::Float64, false));
+            b.push(f("c_mktsegment", DataType::Utf8, false));
+            b.push(f("c_comment", DataType::Utf8, false));
+            b.finish()
+        }
+        Table::Orders => {
+            b.push(f("c_orderkey", DataType::Int32, false));
+            b.push(f("c_custkey", DataType::Int32, false));
+            b.push(f("c_orderstatus", DataType::Utf8, false));
+            b.push(f("c_totalprice", DataType::Float64, false));
+            b.push(f("c_orderdate", DataType::Utf8, false));
+            b.push(f("c_orderpriority", DataType::Utf8, false));
+            b.push(f("c_clerk", DataType::Utf8, false));
+            b.push(f("c_shippriority", DataType::Int32, false));
+            b.push(f("c_comment", DataType::Utf8, false));
+            b.finish()
+        }
+        Table::Lineitem => {
+            b.push(f("l_orderkey", DataType::Int32, false));
+            b.push(f("l_partkey", DataType::Int32, false));
+            b.push(f("l_suppkey", DataType::Int32, false));
+            b.push(f("l_linenumber", DataType::Int32, false));
+            b.push(f("l_quantity", DataType::Float64, false));
+            b.push(f("l_extendedprice", DataType::Float64, false));
+            b.push(f("l_discount", DataType::Float64, false));
+            b.push(f("l_tax", DataType::Float64, false));
+            b.push(f("l_returnflag", DataType::Utf8, false));
+            b.push(f("l_linestatus", DataType::Utf8, false));
+            b.push(f("l_shipedate", DataType::Utf8, false));
+            b.push(f("l_commitdate", DataType::Utf8, false));
+            b.push(f("l_receiptdate", DataType::Utf8, false));
+            b.push(f("l_shipinstruct", DataType::Utf8, false));
+            b.push(f("l_shipmode", DataType::Utf8, false));
+            b.push(f("l_comment", DataType::Utf8, false));
+            b.finish()
+        }
+        Table::OrderLineitem => {
+            return Err(anyhow::Error::msg(
+                "Cannot generate schema for two tables, order and lineitem",
+            ))
+        }
+        Table::PartPartSupp => {
+            return Err(anyhow::Error::msg(
+                "Cannot generate schema for two tables, part and partsupp",
+            ))
+        }
+        Table::Nation => {
+            b.push(f("n_nationkey", DataType::Int32, false));
+            b.push(f("n_name", DataType::Utf8, false));
+            b.push(f("n_regionkey", DataType::Int32, false));
+            b.push(f("n_comment", DataType::Utf8, false));
+            b.finish()
+        }
+        Table::Region => {
+            b.push(f("n_regionkey", DataType::Int32, false));
+            b.push(f("n_name", DataType::Utf8, false));
+            b.push(f("n_comment", DataType::Utf8, false));
+            b.finish()
+        }
+    };
+    Ok(schema)
 }
 
 macro_rules! load_query {
