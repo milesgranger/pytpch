@@ -260,9 +260,9 @@ fn read_tables<P: AsRef<std::path::Path>>(dir: P) -> Result<HashMap<String, Vec<
 
 fn get_schema(table: Table) -> Result<arrow::datatypes::Schema> {
     let f = |name, type_, nullable| Field::new(name, type_, nullable);
+    let mut b = SchemaBuilder::new();
     let schema = match table {
         Table::Part => {
-            let mut b = SchemaBuilder::new();
             b.push(f("p_partkey", DataType::Int32, false));
             b.push(f("p_name", DataType::Utf8, false));
             b.push(f("p_mfgr", DataType::Utf8, false));
@@ -274,7 +274,89 @@ fn get_schema(table: Table) -> Result<arrow::datatypes::Schema> {
             b.push(f("p_comment", DataType::Utf8, false));
             b.finish()
         }
-        _ => unimplemented!(),
+        Table::PartSupp => {
+            b.push(f("ps_partkey", DataType::Int32, false));
+            b.push(f("ps_suppkey", DataType::Int32, false));
+            b.push(f("ps_availqty", DataType::Int32, false));
+            b.push(f("ps_supplycost", DataType::Float64, false));
+            b.push(f("ps_comment", DataType::Utf8, false));
+            b.finish()
+        }
+        Table::Supplier => {
+            b.push(f("s_suppkey", DataType::Int32, false));
+            b.push(f("s_name", DataType::Utf8, false));
+            b.push(f("s_address", DataType::Utf8, false));
+            b.push(f("s_nationkey", DataType::Int32, false));
+            b.push(f("s_phone", DataType::Utf8, false));
+            b.push(f("s_acctbal", DataType::Float64, false));
+            b.push(f("s_comment", DataType::Utf8, false));
+            b.finish()
+        }
+        Table::Customer => {
+            b.push(f("c_custkey", DataType::Int32, false));
+            b.push(f("c_name", DataType::Utf8, false));
+            b.push(f("c_address", DataType::Utf8, false));
+            b.push(f("c_nationkey", DataType::Int32, false));
+            b.push(f("c_phone", DataType::Utf8, false));
+            b.push(f("c_acctbal", DataType::Float64, false));
+            b.push(f("c_mktsegment", DataType::Utf8, false));
+            b.push(f("c_comment", DataType::Utf8, false));
+            b.finish()
+        }
+        Table::Orders => {
+            b.push(f("c_orderkey", DataType::Int32, false));
+            b.push(f("c_custkey", DataType::Int32, false));
+            b.push(f("c_orderstatus", DataType::Utf8, false));
+            b.push(f("c_totalprice", DataType::Float64, false));
+            b.push(f("c_orderdate", DataType::Utf8, false));
+            b.push(f("c_orderpriority", DataType::Utf8, false));
+            b.push(f("c_clerk", DataType::Utf8, false));
+            b.push(f("c_shippriority", DataType::Int32, false));
+            b.push(f("c_comment", DataType::Utf8, false));
+            b.finish()
+        }
+        Table::Lineitem => {
+            b.push(f("l_orderkey", DataType::Int32, false));
+            b.push(f("l_partkey", DataType::Int32, false));
+            b.push(f("l_suppkey", DataType::Int32, false));
+            b.push(f("l_linenumber", DataType::Int32, false));
+            b.push(f("l_quantity", DataType::Float64, false));
+            b.push(f("l_extendedprice", DataType::Float64, false));
+            b.push(f("l_discount", DataType::Float64, false));
+            b.push(f("l_tax", DataType::Float64, false));
+            b.push(f("l_returnflag", DataType::Utf8, false));
+            b.push(f("l_linestatus", DataType::Utf8, false));
+            b.push(f("l_shipedate", DataType::Utf8, false));
+            b.push(f("l_commitdate", DataType::Utf8, false));
+            b.push(f("l_receiptdate", DataType::Utf8, false));
+            b.push(f("l_shipinstruct", DataType::Utf8, false));
+            b.push(f("l_shipmode", DataType::Utf8, false));
+            b.push(f("l_comment", DataType::Utf8, false));
+            b.finish()
+        }
+        Table::OrderLineitem => {
+            return Err(anyhow::Error::msg(
+                "Cannot generate schema for two tables, order and lineitem",
+            ))
+        }
+        Table::PartPartSupp => {
+            return Err(anyhow::Error::msg(
+                "Cannot generate schema for two tables, part and partsupp",
+            ))
+        }
+        Table::Nation => {
+            b.push(f("n_nationkey", DataType::Int32, false));
+            b.push(f("n_name", DataType::Utf8, false));
+            b.push(f("n_regionkey", DataType::Int32, false));
+            b.push(f("n_comment", DataType::Utf8, false));
+            b.finish()
+        }
+        Table::Region => {
+            b.push(f("n_regionkey", DataType::Int32, false));
+            b.push(f("n_name", DataType::Utf8, false));
+            b.push(f("n_comment", DataType::Utf8, false));
+            b.finish()
+        }
     };
     Ok(schema)
 }
