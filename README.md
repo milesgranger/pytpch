@@ -51,7 +51,8 @@ which is a fork of [databricks/tpch-dbgen](https://github.com/databricks/tpch-db
 tpch-dbgen is originally a CLI to generate CSV files for TPC-H data. I wanted to make it into an ergonomic
 Python API for use in other projects. 
 
-TODOS:
-  - [ ] Make thread safe (remove global and static function variables in C lib, and remove changing of CWD)
+TODOS (roughly in order of priority):
+  - [ ] Support for more than Linux x86_64 (mostly just adapting C lib and updating CI)
   - [ ] Write directly to Arrow, removing CSV writing (w/ nanoarrow probably)
+  - [ ] Make thread safe (remove global and static function variables in C lib, and remove changing of CWD)
   - [ ] Separate out the Rust stuff into it's own crate.
