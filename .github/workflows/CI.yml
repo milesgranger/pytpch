@@ -95,15 +95,15 @@ jobs:
       run: cargo build --release
     - name: Tests
       run: cargo test --release -- --test-threads 1  # TODO: dbgen not thread-safe
-    - name: Build wheels - cramjam-python
+    - name: Build wheels
       uses: PyO3/maturin-action@v1
       with:
         target: ${{ matrix.target }}
         args: -i python --release --out dist
-    - name: Install built wheel
-      run: |
-        pip install pyarrow
-        pip install pytpch --no-index --find-links dist --force-reinstall
+    - name: Install wheel
+      run: pip install .
+    - name: Python Test
+      run: python -c "import pytpch"  # TODO: proper python side tests
     - name: Upload wheels
       uses: actions/upload-artifact@v3
       with:
