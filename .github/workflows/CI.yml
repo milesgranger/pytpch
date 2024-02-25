@@ -101,7 +101,9 @@ jobs:
         target: ${{ matrix.target }}
         args: -i python --release --out dist
     - name: Install built wheel
-      run: pip install pytpch --no-index --find-links dist --force-reinstall
+      run: |
+        pip install pyarrow
+        pip install pytpch --no-index --find-links dist --force-reinstall
     - name: Upload wheels
       uses: actions/upload-artifact@v3
       with:

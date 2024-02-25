@@ -56,3 +56,13 @@ TODOS (roughly in order of priority):
   - [ ] Write directly to Arrow, removing CSV writing (w/ nanoarrow probably)
   - [ ] Make thread safe (remove global and static function variables in C lib, and remove changing of CWD)
   - [ ] Separate out the Rust stuff into it's own crate.
+
+### Build from source...
+
+Roughly:
+
+- `git clone --recursive git@github.com:milesgranger/pytpch.git`
+- `python -m pip install maturin`
+- `maturin build --release`
+
+That'll only work if you're on x86_64 linux for now, you can try adapting `build.rs` but good luck with that. For now.
