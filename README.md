@@ -42,7 +42,7 @@ print(pytpch.QUERY_1)
 
 ---
 
-#### Tell me more...
+### Tell me more...
 
 Python bindings (thru Rust, b/c why not) to [libdbgen](https://github.com/milesgranger/libdbgen) 
 which is a fork of [databricks/tpch-dbgen](https://github.com/databricks/tpch-dbgen) for generating 
@@ -52,6 +52,6 @@ tpch-dbgen is originally a CLI to generate CSV files for TPC-H data. I wanted to
 Python API for use in other projects. 
 
 TODOS:
-  - [] Make thread safe (remove global and static function variables in C lib, and remove changing of CWD)
-  - [] Write directly to Arrow, removing CSV writing (w/ nanoarrow probably)
-  - [] Separate out the Rust stuff into it's own crate.
+  - [ ] Make thread safe (remove global and static function variables in C lib, and remove changing of CWD)
+  - [ ] Write directly to Arrow, removing CSV writing (w/ nanoarrow probably)
+  - [ ] Separate out the Rust stuff into it's own crate.
