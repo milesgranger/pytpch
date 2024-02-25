@@ -58,11 +58,11 @@ pub fn dbgen_py(
     py: Python,
     sf: Option<usize>,
     table: Option<Table>,
-    n_chunks: Option<usize>,
+    n_steps: Option<usize>,
     nth_step: Option<usize>,
 ) -> PyResult<PyObject> {
     let table_batches = py
-        .allow_threads(|| dbgen(sf.unwrap_or(1), nth_step, n_chunks, table))
+        .allow_threads(|| dbgen(sf.unwrap_or(1), nth_step, n_steps, table))
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
     let pyarrow = py.import("pyarrow")?;
@@ -87,16 +87,16 @@ macro_rules! as_ptr {
 pub fn dbgen(
     scale: usize,
     step: Option<usize>,
-    n_chunks: Option<usize>, // analogous to 'children' in libdbgen
+    n_steps: Option<usize>, // analogous to 'children' in libdbgen
     table: Option<Table>,
 ) -> Result<ArrowTables> {
     // Invariants
-    if let Some(n_chunks) = n_chunks {
+    if let Some(n_steps) = n_steps {
         if let Some(step) = step {
-            if n_chunks < n_chunks {
+            if step > n_steps {
                 return Err(anyhow::Error::msg(format!(
-                    "Trying to set nth_step={} and n_chunks={}; nth_step must be <= n_chunks",
-                    step, n_chunks
+                    "Trying to set nth_step={} and n_steps={}; nth_step must be <= n_steps",
+                    step, n_steps
                 )));
             }
         }
@@ -114,7 +114,7 @@ pub fn dbgen(
         ffi::dbgen(
             &(scale as _),
             as_ptr!(step),
-            as_ptr!(n_chunks),
+            as_ptr!(n_steps),
             as_ptr!(table),
         )
     };

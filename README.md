@@ -31,13 +31,13 @@ tables: dict[str, pa.Table] = pytpch.dbgen(sf=1, table=pytpch.Table.Nation)
 # Example of generating data in parallel:
 from concurrent.futures import ProcessPoolExecutor
 
-n_chunks = 10  # 10 total chunks
+n_steps = 10  # 10 total chunks
 
 def gen_step(step):
-    return pytpch.dbgen(sf=10, n_chunks=n_chunks, nth_step=step)
+    return pytpch.dbgen(sf=10, n_steps=n_steps, nth_step=step)
 
 with ProcessPoolExecutor() as executor:
-    jobs: list[dict[str, pa.Table]] = list(executor.map(gen_step, range(n_chunks)))
+    jobs: list[dict[str, pa.Table]] = list(executor.map(gen_step, range(n_steps)))
   
 
 # Default reference queries provided (1-22) as:
