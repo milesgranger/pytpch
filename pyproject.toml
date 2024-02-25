@@ -1,0 +1,25 @@
+[project]
+name = "pytpch"
+keywords = ["tpc-h"]
+requires-python = ">=3.8"
+license = { file = "LICENSE" }
+dependencies = ["pyarrow"]
+
+[project.urls]
+homepage = "https://github.com/milesgranger/pytpch"
+documentation = "https://github.com/milesgranger/pytpch"
+repository = "https://github.com/milesgranger/pytpch"
+
+[build-system]
+requires = ["maturin>=0.14"]
+build-backend = "maturin"
+
+[tool.maturin]
+strip = true
+
+[project.optional-dependencies]
+dev = [
+  "black==22.3.0",
+  "pytest>=5.30",
+  "pytest-xdist",
+]
